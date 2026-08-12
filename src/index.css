@@ -1,0 +1,378 @@
+@import 'tailwindcss';
+
+/* PrimeView / Aura-inspired design tokens */
+@theme {
+  --font-sans: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'IBM Plex Sans', 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #334155;
+  --color-slate-soft: #64748b;
+  --color-mist: #f1f5f9;
+  --color-paper: #f8fafc;
+  --color-teal: #10b981;
+  --color-teal-dark: #059669;
+  --color-teal-soft: #ecfdf5;
+  --color-amber: #d97706;
+  --color-rose: #dc2626;
+  --color-emerald: #059669;
+  --color-line: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-sidebar: #0f172a;
+  --color-sidebar-muted: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Soft Aura-like focus for native controls using the theme */
+:where(input, select, textarea):focus {
+  outline: none;
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 1px var(--color-teal);
+}
+
+/* PrimeReact Dropdown — match form fields + solid overlay panel */
+.pr-dropdown .p-dropdown {
+  width: 100%;
+  min-height: 2.1rem;
+  height: auto;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(18, 18, 23, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pr-dropdown .p-dropdown:not(.p-disabled):hover {
+  border-color: color-mix(in srgb, var(--color-slate-soft) 40%, var(--color-line));
+}
+
+.pr-dropdown .p-dropdown.p-focus,
+.pr-dropdown .p-dropdown:not(.p-disabled).p-focus {
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 1px var(--color-teal);
+}
+
+.pr-dropdown .p-dropdown .p-dropdown-label {
+  display: flex;
+  align-items: center;
+  white-space: normal;
+  line-height: 1.35;
+  padding: 0.375rem 0.625rem;
+  color: var(--color-ink);
+  background: transparent;
+  font-size: 0.875rem;
+}
+
+.pr-dropdown .p-dropdown .p-dropdown-label.p-placeholder {
+  color: color-mix(in srgb, var(--color-slate-soft) 70%, transparent);
+}
+
+.pr-dropdown .p-dropdown .p-dropdown-trigger {
+  width: 2rem;
+  height: 100%;
+  color: var(--color-slate-soft);
+  background: transparent;
+  border: 0;
+  justify-content: center;
+}
+
+.pr-dropdown .p-dropdown .p-dropdown-trigger-icon {
+  font-size: 0.75rem;
+}
+
+.pr-dropdown-panel.p-dropdown-panel,
+.p-dropdown-panel.pr-dropdown-panel {
+  background: #ffffff !important;
+  border: 1px solid var(--color-line) !important;
+  border-radius: 0.5rem !important;
+  box-shadow:
+    0 10px 15px -3px rgba(15, 23, 42, 0.12),
+    0 4px 6px -4px rgba(15, 23, 42, 0.08) !important;
+  padding: 0.25rem !important;
+  margin-top: 0.25rem;
+  z-index: 2000 !important;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.pr-dropdown-panel .p-dropdown-items-wrapper {
+  max-height: 16rem;
+}
+
+.pr-dropdown-panel .p-dropdown-items {
+  margin: 0;
+  padding: 0.125rem;
+  list-style: none;
+  background: #ffffff;
+}
+
+.pr-dropdown-panel .p-dropdown-item {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  padding: 0.625rem 0.75rem !important;
+  margin: 0.125rem 0;
+  border-radius: 0.375rem;
+  border: 0;
+  color: var(--color-ink) !important;
+  background: transparent !important;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.pr-dropdown-panel .p-dropdown-item:not(.p-disabled):hover,
+.pr-dropdown-panel .p-dropdown-item.p-focus {
+  background: var(--color-mist) !important;
+  color: var(--color-ink) !important;
+}
+
+.pr-dropdown-panel .p-dropdown-item.p-highlight,
+.pr-dropdown-panel .p-dropdown-item.p-highlight.p-focus {
+  background: var(--color-teal-soft) !important;
+  color: var(--color-teal-dark) !important;
+  font-weight: 600;
+}
+
+.pr-dropdown-panel .p-dropdown-empty-message {
+  padding: 0.75rem;
+  color: var(--color-slate-soft);
+}
+
+.pr-dropdown-panel .p-dropdown-header {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+  background: #ffffff;
+}
+
+.pr-dropdown-panel .p-dropdown-filter-container {
+  width: 100%;
+}
+
+.pr-dropdown-panel .p-dropdown-filter {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(18, 18, 23, 0.05);
+}
+
+.pr-dropdown-panel .p-dropdown-filter:focus {
+  outline: none;
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 1px var(--color-teal);
+}
+
+.pr-dropdown-panel .p-dropdown-filter-icon {
+  color: var(--color-slate-soft);
+}
+
+/* Instant open — no overlay enter/exit animation */
+.pr-dropdown-panel.p-dropdown-panel,
+.pr-dropdown-panel.p-connected-overlay-enter,
+.pr-dropdown-panel.p-connected-overlay-enter-active,
+.pr-dropdown-panel.p-connected-overlay-exit,
+.pr-dropdown-panel.p-connected-overlay-exit-active,
+.pr-dropdown-panel.p-connected-overlay-enter-done {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Type-in-field supplier search (AutoComplete) */
+.pr-autocomplete .p-autocomplete {
+  width: 100%;
+  display: inline-flex;
+}
+
+.pr-autocomplete .p-autocomplete-input {
+  flex: 1;
+  width: 100%;
+  min-height: 2.1rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem 0 0 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(18, 18, 23, 0.05);
+}
+
+.pr-autocomplete .p-autocomplete-dropdown {
+  width: 2rem;
+  color: var(--color-slate-soft);
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-left: 0;
+  border-radius: 0 0.375rem 0.375rem 0;
+  box-shadow: 0 1px 2px 0 rgba(18, 18, 23, 0.05);
+}
+
+.pr-autocomplete .p-autocomplete-input:enabled:hover,
+.pr-autocomplete .p-autocomplete-dropdown:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-slate-soft) 40%, var(--color-line));
+}
+
+.pr-autocomplete .p-autocomplete-input:enabled:focus {
+  outline: none;
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 1px var(--color-teal);
+}
+
+.pr-dropdown-panel.p-autocomplete-panel,
+.p-autocomplete-panel.pr-dropdown-panel {
+  background: #ffffff !important;
+  border: 1px solid var(--color-line) !important;
+  border-radius: 0.5rem !important;
+  box-shadow:
+    0 10px 15px -3px rgba(15, 23, 42, 0.12),
+    0 4px 6px -4px rgba(15, 23, 42, 0.08) !important;
+  padding: 0.25rem !important;
+  z-index: 2000 !important;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.pr-dropdown-panel .p-autocomplete-items {
+  margin: 0;
+  padding: 0.125rem;
+  list-style: none;
+}
+
+.pr-dropdown-panel .p-autocomplete-item {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  padding: 0.625rem 0.75rem !important;
+  margin: 0.125rem 0;
+  border-radius: 0.375rem;
+  color: var(--color-ink) !important;
+  background: transparent !important;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.pr-dropdown-panel .p-autocomplete-item:hover,
+.pr-dropdown-panel .p-autocomplete-item.p-highlight {
+  background: var(--color-mist) !important;
+}
+
+/* PrimeReact Tooltip — white bubble */
+.p-tooltip .p-tooltip-text {
+  background: #ffffff !important;
+  color: var(--color-ink) !important;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.12),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.p-tooltip.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: #ffffff !important;
+}
+
+.p-tooltip.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: #ffffff !important;
+}
+
+.p-tooltip.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: #ffffff !important;
+}
+
+.p-tooltip.p-tooltip-right .p-tooltip-arrow {
+  border-right-color: #ffffff !important;
+}
+
+/* PrimeReact Messages — match Aura success/error banners */
+.finance-messages .p-message {
+  border-radius: 0.5rem;
+  margin: 0 0 0.5rem;
+  border-width: 0;
+  border-left-width: 6px;
+  border-left-style: solid;
+  box-shadow: none;
+}
+
+.finance-messages .p-message-wrapper {
+  min-height: 3.25rem;
+  padding: 0.875rem 1rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.finance-messages .p-message-icon {
+  font-size: 1.125rem;
+}
+
+.finance-messages .p-message-text {
+  line-height: 1.35;
+}
+
+.finance-messages .p-message.p-message-success {
+  background: color-mix(in oklab, var(--color-teal) 12%, white);
+  color: var(--color-teal-dark);
+  border-left-color: var(--color-teal);
+}
+
+.finance-messages .p-message.p-message-success .p-message-icon,
+.finance-messages .p-message.p-message-success .p-message-close,
+.finance-messages .p-message.p-message-success .p-message-summary,
+.finance-messages .p-message.p-message-success .p-message-detail {
+  color: var(--color-teal-dark);
+}
+
+.finance-messages .p-message.p-message-error {
+  background: color-mix(in oklab, var(--color-rose) 10%, white);
+  color: var(--color-rose);
+  border-left-color: var(--color-rose);
+}
+
+.finance-messages .p-message.p-message-error .p-message-icon,
+.finance-messages .p-message.p-message-error .p-message-close,
+.finance-messages .p-message.p-message-error .p-message-summary,
+.finance-messages .p-message.p-message-error .p-message-detail {
+  color: var(--color-rose);
+}
+
+.finance-messages .p-message-summary {
+  font-weight: 700;
+}
+
+.finance-messages .p-message-detail {
+  font-weight: 500;
+  margin-top: 0.15rem;
+}
