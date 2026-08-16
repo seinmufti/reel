@@ -65,7 +65,41 @@ export function crumbForPath(pathname: string): Crumb[] {
     { label: mod.label, to: mod.to },
   ]
 
-  if (pathname.endsWith('/new') || pathname.includes('/new')) {
+  if (pathname === '/hr/new') {
+    crumbs.push({ label: 'New employee', to: pathname })
+  } else if (/\/hr\/[^/]+\/edit$/.test(pathname)) {
+    crumbs.push({ label: 'Edit', to: pathname })
+  } else if (pathname === '/hr/leave/new') {
+    crumbs.push({ label: 'Request leave', to: pathname })
+  } else if (/^\/hr\/leave\/[^/]+$/.test(pathname)) {
+    crumbs.push({ label: 'Leaves', to: '/hr/leave' })
+    crumbs.push({ label: 'Leave request', to: pathname })
+  } else if (pathname === '/hr/leave') {
+    crumbs.push({ label: 'Leaves', to: pathname })
+  } else if (pathname === '/hr/timesheets') {
+    crumbs.push({ label: 'Timesheets', to: pathname })
+  } else if (pathname === '/hr/payroll') {
+    crumbs.push({ label: 'Payroll', to: pathname })
+  } else if (pathname === '/finance/cash-advance/new') {
+    crumbs.push({ label: 'Request cash advance', to: pathname })
+  } else if (/^\/finance\/cash-advance\/[^/]+$/.test(pathname)) {
+    crumbs.push({ label: 'Cash advance', to: pathname })
+  }
+
+  if (pathname === '/fleet/new') {
+    crumbs.push({ label: 'New trip', to: pathname })
+  } else if (pathname === '/fleet/vehicles') {
+    crumbs.push({ label: 'Vehicles', to: pathname })
+  } else if (pathname === '/fleet/drivers') {
+    crumbs.push({ label: 'Drivers', to: pathname })
+  }
+
+  if (
+    (pathname.endsWith('/new') || pathname.includes('/new')) &&
+    !pathname.startsWith('/hr') &&
+    !pathname.startsWith('/fleet') &&
+    !pathname.startsWith('/finance/cash-advance')
+  ) {
     crumbs.push({ label: 'New', to: `${mod.to}/new` })
   }
   if (pathname.includes('/approvals')) {
@@ -74,7 +108,11 @@ export function crumbForPath(pathname: string): Crumb[] {
   if (/\/projects\/[^/]+$/.test(pathname) && pathname !== '/projects') {
     crumbs.push({ label: 'Detail', to: pathname })
   }
-  if (/\/procurement\/[^/]+\/edit$/.test(pathname)) {
+  if (/\/procurement\/[^/]+\/edit-suggestion$/.test(pathname)) {
+    crumbs.push({ label: 'Edit Suggestion', to: pathname })
+  } else if (/\/procurement\/[^/]+\/suggest$/.test(pathname)) {
+    crumbs.push({ label: 'Suggest Edit', to: pathname })
+  } else if (/\/procurement\/[^/]+\/edit$/.test(pathname)) {
     crumbs.push({ label: 'Edit', to: pathname })
   } else if (/\/procurement\/[^/]+\/exhaustion$/.test(pathname)) {
     crumbs.push({ label: 'Exhaustion of entries', to: pathname })

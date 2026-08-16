@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* PrimeView / Aura-inspired design tokens */
 @theme {
   --font-sans: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
@@ -12,6 +14,7 @@
   --color-teal: #10b981;
   --color-teal-dark: #059669;
   --color-teal-soft: #ecfdf5;
+  --color-mint: #cce8dc;
   --color-amber: #d97706;
   --color-rose: #dc2626;
   --color-emerald: #059669;
@@ -37,6 +40,44 @@ body {
   color: var(--color-ink);
   background: var(--color-paper);
   -webkit-font-smoothing: antialiased;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-ink: #e2e8f0;
+  --color-slate-soft: #94a3b8;
+  --color-mist: #1e293b;
+  --color-paper: #0f172a;
+  --color-teal-soft: #064e3b;
+  --color-mint: #0f3d34;
+  --color-line: #334155;
+  --color-surface: #1e293b;
+}
+
+.dark .bg-white {
+  background-color: var(--color-surface);
+}
+
+.dark .bg-slate-100 {
+  background-color: color-mix(in srgb, var(--color-mist) 85%, var(--color-surface));
+}
+
+.dark .pr-dropdown .p-dropdown,
+.dark .pr-dropdown-panel.p-dropdown-panel,
+.dark .pr-dropdown-panel .p-dropdown-items,
+.dark .pr-dropdown-panel .p-dropdown-header,
+.dark .pr-dropdown-panel .p-dropdown-filter,
+.dark .pr-autocomplete .p-autocomplete-input,
+.dark .pr-autocomplete .p-autocomplete-dropdown,
+.dark .pr-dropdown-panel.p-autocomplete-panel,
+.dark .p-tooltip .p-tooltip-text {
+  background: var(--color-surface) !important;
+}
+
+.dark .pr-dropdown-panel.p-dropdown-panel,
+.dark .pr-dropdown-panel.p-autocomplete-panel,
+.dark .p-tooltip .p-tooltip-text {
+  border-color: var(--color-line) !important;
 }
 
 button,
@@ -79,7 +120,7 @@ textarea {
 .pr-dropdown .p-dropdown .p-dropdown-label {
   display: flex;
   align-items: center;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.35;
   padding: 0.375rem 0.625rem;
   color: var(--color-ink);
@@ -89,6 +130,7 @@ textarea {
 
 .pr-dropdown .p-dropdown .p-dropdown-label.p-placeholder {
   color: color-mix(in srgb, var(--color-slate-soft) 70%, transparent);
+  white-space: nowrap;
 }
 
 .pr-dropdown .p-dropdown .p-dropdown-trigger {

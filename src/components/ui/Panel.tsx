@@ -2,12 +2,14 @@ export function Panel({
   title,
   children,
   className = '',
+  bodyClassName = 'p-4',
   actions,
   leading,
 }: {
   title?: string
   children: React.ReactNode
   className?: string
+  bodyClassName?: string
   actions?: React.ReactNode
   leading?: React.ReactNode
 }) {
@@ -24,7 +26,7 @@ export function Panel({
           {actions}
         </div>
       ) : null}
-      <div className="p-4">{children}</div>
+      <div className={bodyClassName}>{children}</div>
     </section>
   )
 }

@@ -31,7 +31,7 @@ const value = {
     preset: ReelPreset,
     options: {
       prefix: 'p',
-      darkModeSelector: 'none',
+      darkModeSelector: '.dark',
       cssLayer: false,
     },
   },

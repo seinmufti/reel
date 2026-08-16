@@ -8,6 +8,16 @@ export type PaymentStatus = 'pending' | 'paid'
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected'
 
+export type CashAdvanceStatus = 'pending' | 'approved' | 'rejected'
+
+export type LeaveEntitlementPeriod = 'year' | 'month' | 'accrual_month'
+
+export interface LeaveEntitlement {
+  type: string
+  days: number
+  period: LeaveEntitlementPeriod
+}
+
 export type TaskStatus = 'todo' | 'in_progress' | 'done'
 
 export type TripStatus = 'requested' | 'approved' | 'in_progress' | 'completed' | 'cancelled'
@@ -28,6 +38,16 @@ export interface Account {
 }
 
 export type PrCurrency = 'USD' | 'IQD'
+
+export type PrSuggestionSnapshot = {
+  department: string
+  preliminaryExplanation: string
+  comments?: string
+  currency: PrCurrency
+  budgetLine: string
+  projectName?: string
+  items: PrItem[]
+}
 
 export interface Transaction {
   id: string
@@ -117,10 +137,17 @@ export interface PurchaseRequest {
   approverName?: string
   approverPosition?: string
   approverDate?: string
+  financeSignedBy?: string
+  financeSignedAt?: string
+  rejectionReason?: string
+  rejectedBy?: string
+  rejectedAt?: string
   status: PrStatus
   paymentStatus: PaymentStatus
   createdAt: string
   items: PrItem[]
+  /** Snapshot of PR before a reviewer sent suggested edits */
+  suggestionBaseline?: PrSuggestionSnapshot
 }
 
 export interface InventoryItem {
@@ -147,6 +174,8 @@ export interface Employee {
   managerId?: string
   /** Protected account — cannot be removed */
   isAdmin?: boolean
+  /** PNG data URL of drawn or uploaded signature */
+  signature?: string
 }
 
 export interface LeaveRequest {
@@ -158,6 +187,14 @@ export interface LeaveRequest {
   days: number
   status: LeaveStatus
   reason: string
+  rejectionReason?: string
+  rejectedBy?: string
+  rejectedAt?: string
+  approvedBy?: string
+  lmSignedBy?: string
+  lmSignedAt?: string
+  hrSignedBy?: string
+  hrSignedAt?: string
 }
 
 export interface TimesheetEntry {
@@ -235,4 +272,34 @@ export interface TripRequest {
   startDate: string
   endDate: string
   status: TripStatus
+}
+
+export interface CashAdvanceItem {
+  id: string
+  purchaseRequestId?: string
+  /** Display / fallback when PR not linked */
+  prNumber?: string
+  description: string
+  debitUsd: number
+  debitIqd: number
+}
+
+export interface CashAdvance {
+  id: string
+  recipient: string
+  amount: number
+  currency: PrCurrency
+  dateFrom: string
+  dateTo: string
+  status: CashAdvanceStatus
+  items: CashAdvanceItem[]
+  createdAt: string
+  rejectionReason?: string
+  rejectedBy?: string
+  rejectedAt?: string
+  approvedBy?: string
+  lmSignedBy?: string
+  lmSignedAt?: string
+  financeSignedBy?: string
+  financeSignedAt?: string
 }

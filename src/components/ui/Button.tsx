@@ -1,4 +1,4 @@
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel' | 'blue'
 
 const variants: Record<Variant, string> = {
   primary:
@@ -10,6 +10,8 @@ const variants: Record<Variant, string> = {
     'border border-transparent bg-rose text-white shadow-sm hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-rose/30',
   cancel:
     'border border-rose/25 bg-rose/5 text-rose hover:bg-rose/10 focus-visible:ring-2 focus-visible:ring-rose/20',
+  blue:
+    'border border-transparent bg-[#2563eb] text-white shadow-sm hover:bg-[#1d4ed8] focus-visible:ring-2 focus-visible:ring-[#2563eb]/30',
 }
 
 export function Button({

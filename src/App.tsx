@@ -1,26 +1,21 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
+import { RequireDepartment } from './components/RequireDepartment'
 import { DemoProvider, useDemo } from './context/DemoContext'
 import { Dashboard } from './pages/Dashboard'
+import { CashAdvanceRequestPage, CashAdvanceView } from './pages/finance/CashAdvancesSection'
 import { FinancePage } from './pages/finance/FinancePage'
 import { FleetPage } from './pages/fleet/FleetPage'
 import { HrPage } from './pages/hr/HrPage'
 import { LogisticsPage } from './pages/logistics/LogisticsPage'
 import { ProcurementPage } from './pages/procurement/ProcurementPage'
 import { ProjectsPage } from './pages/projects/ProjectsPage'
+import { ThemeProvider } from './context/ThemeContext'
 import { PrimeThemeProvider } from './theme/PrimeThemeProvider'
 
-/** Keep <Routes> mounted during boot so refresh preserves the current URL. */
+/** App shell stays mounted during boot so refresh keeps the current URL. */
 function BootShell() {
-  const { ready, error } = useDemo()
-
-  if (!ready) {
-    return (
-      <div className="flex h-full min-h-screen items-center justify-center text-sm text-slate-soft">
-        Loading local database…
-      </div>
-    )
-  }
+  const { error } = useDemo()
 
   if (error) {
     return (
@@ -44,12 +39,70 @@ function AppRoutes() {
     <Routes>
       <Route element={<BootShell />}>
         <Route index element={<Dashboard />} />
-        <Route path="finance" element={<FinancePage />} />
-        <Route path="procurement/*" element={<ProcurementPage />} />
-        <Route path="logistics" element={<LogisticsPage />} />
-        <Route path="hr" element={<HrPage />} />
-        <Route path="projects/*" element={<ProjectsPage />} />
-        <Route path="fleet" element={<FleetPage />} />
+        <Route
+          path="finance/cash-advance/new"
+          element={
+            <RequireDepartment>
+              <CashAdvanceRequestPage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="finance/cash-advance/:advanceId"
+          element={
+            <RequireDepartment>
+              <CashAdvanceView />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="finance"
+          element={
+            <RequireDepartment>
+              <FinancePage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="procurement/*"
+          element={
+            <RequireDepartment>
+              <ProcurementPage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="logistics"
+          element={
+            <RequireDepartment>
+              <LogisticsPage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="hr/*"
+          element={
+            <RequireDepartment>
+              <HrPage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="projects/*"
+          element={
+            <RequireDepartment>
+              <ProjectsPage />
+            </RequireDepartment>
+          }
+        />
+        <Route
+          path="fleet/*"
+          element={
+            <RequireDepartment>
+              <FleetPage />
+            </RequireDepartment>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -58,12 +111,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <PrimeThemeProvider>
-      <BrowserRouter>
-        <DemoProvider>
-          <AppRoutes />
-        </DemoProvider>
-      </BrowserRouter>
-    </PrimeThemeProvider>
+    <ThemeProvider>
+      <PrimeThemeProvider>
+        <BrowserRouter>
+          <DemoProvider>
+            <AppRoutes />
+          </DemoProvider>
+        </BrowserRouter>
+      </PrimeThemeProvider>
+    </ThemeProvider>
   )
 }

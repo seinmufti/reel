@@ -12,6 +12,7 @@ export type BootstrapPayload = {
   purchaseRequests: import('../types').PurchaseRequest[]
   inventory: import('../types').InventoryItem[]
   leaveRequests: import('../types').LeaveRequest[]
+  leaveEntitlements: import('../types').LeaveEntitlement[]
   timesheets: import('../types').TimesheetEntry[]
   projects: import('../types').Project[]
   goals: import('../types').Goal[]
@@ -19,6 +20,7 @@ export type BootstrapPayload = {
   vehicles: import('../types').Vehicle[]
   drivers: import('../types').Driver[]
   trips: import('../types').TripRequest[]
+  cashAdvances: import('../types').CashAdvance[]
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -28,9 +30,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(text || `Request failed: ${res.status}`)
+    throw new Error(messageFromFailedResponse(text, res.status))
   }
   return res.json() as Promise<T>
+}
+
+function messageFromFailedResponse(text: string, status: number): string {
+  const trimmed = text.trim()
+  if (!trimmed) return `Request failed: ${status}`
+  try {
+    const parsed = JSON.parse(trimmed) as { error?: string }
+    if (parsed.error) return parsed.error
+  } catch {
+    /* not JSON */
+  }
+  const pre = /<pre>([\s\S]*?)<\/pre>/i.exec(trimmed)
+  if (pre?.[1]) {
+    return pre[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240)
+  }
+  if (trimmed.startsWith('<')) return `Request failed: ${status}`
+  return trimmed.slice(0, 240)
 }
 
 export const api = {
@@ -59,10 +78,26 @@ export const api = {
     request<{ ok: boolean; id: string }>(`/api/purchase-requests/${id}`, {
       method: 'DELETE',
     }),
-  updatePrStatus: (id: string, status: string) =>
+  updatePrStatus: (
+    id: string,
+    status: string,
+    extra?: {
+      rejectionReason?: string
+      rejectedBy?: string
+      rejectedAt?: string
+      approverName?: string
+      approverPosition?: string
+      approverDate?: string
+      signSlot?: 'lm' | 'finance'
+      approvedBy?: string
+      approvedAt?: string
+      financeSignedBy?: string
+      financeSignedAt?: string
+    },
+  ) =>
     request<import('../types').PurchaseRequest>(`/api/purchase-requests/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...extra }),
     }),
   payPr: (id: string) =>
     request<{
@@ -97,6 +132,29 @@ export const api = {
     }),
   deleteSupplier: (id: string) =>
     request<{ ok: boolean; id: string }>(`/api/suppliers/${id}`, { method: 'DELETE' }),
+  createCashAdvance: (body: Omit<import('../types').CashAdvance, 'id' | 'createdAt'>) =>
+    request<import('../types').CashAdvance>('/api/cash-advances', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateCashAdvanceStatus: (
+    id: string,
+    status: string,
+    extra?: {
+      rejectionReason?: string
+      rejectedBy?: string
+      rejectedAt?: string
+      approvedBy?: string
+      signSlot?: 'lm' | 'finance' | 'hr'
+      approvedAt?: string
+    },
+  ) =>
+    request<import('../types').CashAdvance>(`/api/cash-advances/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, ...extra }),
+    }),
+  deleteCashAdvance: (id: string) =>
+    request<{ ok: boolean; id: string }>(`/api/cash-advances/${id}`, { method: 'DELETE' }),
   upsertOpeningBalance: (
     month: string,
     body: {
@@ -116,10 +174,28 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ delta }),
     }),
-  updateLeaveStatus: (id: string, status: string) =>
+  updateLeaveStatus: (
+    id: string,
+    status: string,
+    extra?: {
+      rejectionReason?: string
+      rejectedBy?: string
+      rejectedAt?: string
+      approvedBy?: string
+      signSlot?: 'lm' | 'finance' | 'hr'
+      approvedAt?: string
+    },
+  ) =>
     request<import('../types').LeaveRequest>(`/api/leave-requests/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...extra }),
+    }),
+  createLeaveRequest: (
+    body: Omit<import('../types').LeaveRequest, 'id'> & { id?: string },
+  ) =>
+    request<import('../types').LeaveRequest>('/api/leave-requests', {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
   updateTripStatus: (id: string, status: string) =>
     request<import('../types').TripRequest>(`/api/trips/${id}/status`, {

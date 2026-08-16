@@ -1,12 +1,25 @@
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { hiddenModules, primaryModules } from './nav'
+import { useDemo } from '../../context/DemoContext'
+import { useTheme } from '../../context/ThemeContext'
+import { departmentToPath, type Department } from '../../data/mockData'
+import { hiddenModules, primaryModules, type AppModule } from './nav'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium whitespace-nowrap transition ${
     isActive
-      ? 'text-white group-hover/sidebar:bg-teal group-hover/sidebar:shadow-sm'
-      : 'text-white/75 group-hover/sidebar:hover:bg-white/10 group-hover/sidebar:hover:text-white'
+      ? 'text-white group-hover/sidebar:bg-teal group-hover/sidebar:shadow-sm group-data-[open=true]/sidebar:bg-teal group-data-[open=true]/sidebar:shadow-sm'
+      : 'text-white/75 group-hover/sidebar:hover:bg-white/10 group-hover/sidebar:hover:text-white group-data-[open=true]/sidebar:hover:bg-white/10 group-data-[open=true]/sidebar:hover:text-white'
   }`
+
+function modulesForDepartments(modules: AppModule[], userDepartments: string[]) {
+  const allowedPaths = new Set(
+    userDepartments
+      .map((dept) => departmentToPath[dept as Department])
+      .filter(Boolean),
+  )
+  return modules.filter((mod) => allowedPaths.has(mod.to))
+}
 
 function IconBox({
   children,
@@ -19,7 +32,7 @@ function IconBox({
     <span
       className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition ${
         active
-          ? 'bg-teal text-white shadow-sm group-hover/sidebar:bg-transparent group-hover/sidebar:shadow-none'
+          ? 'bg-teal text-white shadow-sm group-hover/sidebar:bg-transparent group-hover/sidebar:shadow-none group-data-[open=true]/sidebar:bg-transparent group-data-[open=true]/sidebar:shadow-none'
           : ''
       }`}
       aria-hidden
@@ -190,6 +203,33 @@ function NorthernLightsIcon() {
   )
 }
 
+function MoonIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+      <path
+        d="M14.2 10.8a5.8 5.8 0 01-7-7 6.2 6.2 0 109 9 5.8 5.8 0 01-2-2z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+      <circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M9 2.5v2M9 13.5v2M2.5 9h2M13.5 9h2M4.4 4.4l1.4 1.4M12.2 12.2l1.4 1.4M4.4 13.6l1.4-1.4M12.2 5.8l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const moduleIcons: Record<string, React.ReactNode> = {
   '/hr': <HrIcon />,
   '/procurement': <ProcurementIcon />,
@@ -200,17 +240,52 @@ const moduleIcons: Record<string, React.ReactNode> = {
 }
 
 export function Sidebar() {
+  const { currentUser } = useDemo()
+  const { dark, toggleTheme } = useTheme()
+  const visiblePrimary = modulesForDepartments(primaryModules, currentUser.departments)
+  const visibleHidden = modulesForDepartments(hiddenModules, currentUser.departments)
+  const [open, setOpen] = useState(false)
+  const menuPin = useRef(false)
+
+  useEffect(() => {
+    function releasePin() {
+      menuPin.current = false
+    }
+    window.addEventListener('click', releasePin)
+    window.addEventListener('blur', releasePin)
+    return () => {
+      window.removeEventListener('click', releasePin)
+      window.removeEventListener('blur', releasePin)
+    }
+  }, [])
+
   return (
     <aside className="relative z-40 w-14 shrink-0 self-stretch">
       {/* Outer rail clips; inner column stays w-64 so labels never shift */}
-      <div className="group/sidebar absolute inset-y-0 left-0 w-14 overflow-hidden border-r border-white/5 bg-sidebar text-white transition-[width,box-shadow] duration-200 ease-out hover:w-64 hover:shadow-[12px_0_28px_rgba(0,0,0,0.28)]">
+      <div
+        data-open={open ? 'true' : undefined}
+        className={`group/sidebar absolute inset-y-0 left-0 overflow-hidden border-r border-white/5 bg-sidebar text-white transition-[width,box-shadow] duration-200 ease-out hover:w-64 hover:shadow-[12px_0_28px_rgba(0,0,0,0.28)] ${
+          open ? 'w-64 shadow-[12px_0_28px_rgba(0,0,0,0.28)]' : 'w-14'
+        }`}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => {
+          if (!menuPin.current) setOpen(false)
+        }}
+        onContextMenu={() => {
+          menuPin.current = true
+          setOpen(true)
+        }}
+      >
         <div className="flex h-full w-64 flex-col">
-          <div className="flex items-start gap-3 border-b border-white/10 px-3 py-4">
+          <div className="flex items-center gap-3 border-b border-white/10 px-3 py-4">
             <IconBox>
               <FishingRodIcon />
             </IconBox>
-            <div className="min-w-0 pt-0.5">
-              <div className="font-display text-2xl font-bold tracking-tight leading-none">REEL</div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-sidebar-muted">
+                The
+              </div>
+              <div className="mt-1 font-display text-2xl font-bold tracking-tight leading-none">REEL</div>
               <div className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-sidebar-muted">
                 Project
               </div>
@@ -228,48 +303,71 @@ export function Sidebar() {
               )}
             </NavLink>
 
-            <div className="flex items-center gap-3 px-2 pt-4 pb-1">
-              <IconBox>{null}</IconBox>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted/70">
-                Modules
-              </span>
-            </div>
-            {primaryModules.map((mod) => (
-              <NavLink key={mod.to} to={mod.to} className={linkClass} title={mod.short}>
-                {({ isActive }) => (
-                  <>
-                    <IconBox active={isActive}>{moduleIcons[mod.to]}</IconBox>
-                    <span>{mod.short}</span>
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {visiblePrimary.length > 0 ? (
+              <>
+                <div className="flex items-center gap-3 px-2 pt-4 pb-1">
+                  <IconBox>{null}</IconBox>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted/70">
+                    Modules
+                  </span>
+                </div>
+                {visiblePrimary.map((mod) => (
+                  <NavLink key={mod.to} to={mod.to} className={linkClass} title={mod.short}>
+                    {({ isActive }) => (
+                      <>
+                        <IconBox active={isActive}>{moduleIcons[mod.to]}</IconBox>
+                        <span>{mod.short}</span>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+              </>
+            ) : null}
 
-            <div className="flex items-center gap-3 px-2 pt-4 pb-1">
-              <IconBox>{null}</IconBox>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-white/20">
-                Hiddens
+            {visibleHidden.length > 0 ? (
+              <>
+                <div className="flex items-center gap-3 px-2 pt-4 pb-1">
+                  <IconBox>{null}</IconBox>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-white/20">
+                    Hiddens
+                  </span>
+                </div>
+                {visibleHidden.map((mod) => (
+                  <span
+                    key={mod.to}
+                    aria-disabled="true"
+                    title="Disabled"
+                    className="flex cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-sm font-medium whitespace-nowrap text-white/25"
+                  >
+                    <IconBox>{moduleIcons[mod.to]}</IconBox>
+                    <span>{mod.short}</span>
+                  </span>
+                ))}
+              </>
+            ) : null}
+          </nav>
+          <div className="mt-auto">
+            <div className="border-t border-white/10 px-1 py-2">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-pressed={dark}
+                className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm font-medium whitespace-nowrap text-white/75 transition hover:bg-white/10 hover:text-white"
+              >
+                <IconBox>{dark ? <SunIcon /> : <MoonIcon />}</IconBox>
+                <span>{dark ? 'Light mode' : 'Dark mode'}</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-3 border-t border-white/10 px-3 py-4 text-xs text-sidebar-muted">
+              <IconBox>
+                <NorthernLightsIcon />
+              </IconBox>
+              <span className="leading-snug">
+                Developed by <span className="font-semibold text-white/80">Nordlys</span>
               </span>
             </div>
-            {hiddenModules.map((mod) => (
-              <span
-                key={mod.to}
-                aria-disabled="true"
-                title="Disabled"
-                className="flex cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-sm font-medium whitespace-nowrap text-white/25"
-              >
-                <IconBox>{moduleIcons[mod.to]}</IconBox>
-                <span>{mod.short}</span>
-              </span>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3 border-t border-white/10 px-3 py-4 text-xs text-sidebar-muted">
-            <IconBox>
-              <NorthernLightsIcon />
-            </IconBox>
-            <span className="leading-snug">
-              Developed by <span className="font-semibold text-white/80">Nordlys</span>
-            </span>
           </div>
         </div>
       </div>

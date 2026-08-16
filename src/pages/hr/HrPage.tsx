@@ -1,22 +1,45 @@
 import { useState, type FormEvent } from 'react'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Badge, statusTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Field, inputClass } from '../../components/ui/Field'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Panel } from '../../components/ui/Panel'
+import { PersonAvatar } from '../../components/ui/PersonAvatar'
+import { SignatureCapture } from '../../components/ui/SignatureCapture'
+import { SignatureStatusAvatars } from '../../components/ui/SignatureStatusAvatars'
 import { Table, Td, Th } from '../../components/ui/Table'
+import { leaveSignatureSlots } from '../../lib/signatureSlots'
 import { useDemo } from '../../context/DemoContext'
 import {
+  accruedLeaveBalance,
   directReports,
   employeeDepth,
   employeesInOrgOrder,
   formatMoney,
+  formatDate,
   payrollForEmployees,
 } from '../../data/mockData'
 import type { Employee } from '../../types'
+import { LeaveRequestPage, LeaveRequestView } from './LeaveRequestPage'
 
 type Tab = 'people' | 'leave' | 'timesheets' | 'payroll' | 'form'
 type PeopleView = 'list' | 'tree'
+
+const HR_TABS = [
+  ['people', 'Employees', '/hr'],
+  ['leave', 'Leaves', '/hr/leave'],
+  ['timesheets', 'Timesheets', '/hr/timesheets'],
+  ['payroll', 'Payroll', '/hr/payroll'],
+] as const
+
+function tabFromPath(pathname: string): Tab {
+  if (pathname.endsWith('/leave')) return 'leave'
+  if (pathname.endsWith('/timesheets')) return 'timesheets'
+  if (pathname.endsWith('/payroll')) return 'payroll'
+  if (pathname.endsWith('/new') || pathname.endsWith('/edit')) return 'form'
+  return 'people'
+}
 
 function ListIcon() {
   return (
@@ -79,24 +102,21 @@ function ViewSwitch({
 function OrgTreeCard({
   employee,
   employees,
-  accent,
 }: {
   employee: Employee
   employees: Employee[]
-  accent?: boolean
 }) {
   const manager = employees.find((e) => e.id === employee.managerId)
   const reports = directReports(employee.id, employees)
 
   return (
     <div className="group relative flex w-[9.5rem] flex-col items-center text-center">
-      <div
-        className={`mb-2 flex h-11 w-11 items-center justify-center rounded-full font-display text-sm font-bold shadow-sm transition group-hover:scale-105 ${
-          accent ? 'bg-teal text-white' : 'bg-teal-soft text-teal-dark'
-        }`}
-      >
-        {employee.name.trim()[0]?.toUpperCase() ?? '?'}
-      </div>
+      <PersonAvatar
+        name={employee.name}
+        seed={employee.id}
+        showTooltip={false}
+        className="mb-2"
+      />
       <div className="text-sm font-semibold leading-tight text-ink">{employee.name}</div>
       <div className="mt-0.5 text-xs leading-snug text-slate-soft/75">{employee.role}</div>
       <div className="pointer-events-none absolute left-full top-0 z-20 ml-2 w-52 rounded-lg border border-line bg-white p-3 text-left opacity-0 shadow-lg transition group-hover:opacity-100">
@@ -129,7 +149,6 @@ function OrgTreeCard({
 function OrgTreeBranch({
   employee,
   employees,
-  isRoot,
 }: {
   employee: Employee
   employees: Employee[]
@@ -139,7 +158,7 @@ function OrgTreeBranch({
 
   return (
     <div className="flex flex-col items-center">
-      <OrgTreeCard employee={employee} employees={employees} accent={isRoot || employee.isAdmin} />
+      <OrgTreeCard employee={employee} employees={employees} />
       {reports.length > 0 ? (
         <>
           <div className="h-4 w-px bg-line" aria-hidden />
@@ -200,6 +219,7 @@ function EmployeeForm({
 }) {
   const managerOptions = employees.filter((emp) => emp.id !== employee?.id)
   const defaultManager = employee?.managerId ?? (employee?.isAdmin ? '' : 'emp-zak')
+  const [signature, setSignature] = useState(employee?.signature ?? '')
 
   return (
     <Panel title={mode === 'create' ? 'Create employee' : `Edit employee — ${employee?.name}`}>
@@ -291,6 +311,11 @@ function EmployeeForm({
           />
         </Field>
         <div className="sm:col-span-2">
+          <span className="mb-1.5 block text-[13px] font-medium text-slate-soft">Signature</span>
+          <SignatureCapture value={signature} onChange={setSignature} />
+          <input type="hidden" name="signature" value={signature} />
+        </div>
+        <div className="sm:col-span-2">
           <Button type="submit">{mode === 'create' ? 'Create employee' : 'Save changes'}</Button>
         </div>
       </form>
@@ -299,9 +324,27 @@ function EmployeeForm({
 }
 
 export function HrPage() {
+  return (
+    <Routes>
+      <Route path="leave/new" element={<LeaveRequestPage />} />
+      <Route path="leave/:leaveId" element={<LeaveRequestView />} />
+      <Route path="new" element={<HrShell />} />
+      <Route path=":employeeId/edit" element={<HrShell />} />
+      <Route path="leave" element={<HrShell />} />
+      <Route path="timesheets" element={<HrShell />} />
+      <Route path="payroll" element={<HrShell />} />
+      <Route index element={<HrShell />} />
+      <Route path="*" element={<Navigate to="/hr" replace />} />
+    </Routes>
+  )
+}
+
+function HrShell() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const { employeeId } = useParams()
   const {
     leaveRequests,
-    updateLeaveStatus,
     employees,
     addEmployee,
     updateEmployee,
@@ -310,9 +353,9 @@ export function HrPage() {
     currentUser,
   } = useDemo()
   const isAdmin = Boolean(currentUser.isAdmin)
-  const [tab, setTab] = useState<Tab>('people')
+  const tab = tabFromPath(pathname)
   const [peopleView, setPeopleView] = useState<PeopleView>('list')
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const editingId = tab === 'form' && employeeId ? employeeId : null
   const payroll = payrollForEmployees(employees)
   const editingEmployee = employees.find((e) => e.id === editingId)
 
@@ -326,6 +369,7 @@ export function HrPage() {
       salary: Number(fd.get('salary')),
       startDate: String(fd.get('startDate')),
       managerId: String(fd.get('managerId') || '') || undefined,
+      signature: String(fd.get('signature') || ''),
     }
   }
 
@@ -345,14 +389,14 @@ export function HrPage() {
       salary: data.salary,
       startDate: data.startDate,
       managerId: data.managerId,
+      signature: data.signature || undefined,
     })
-    setEditingId(null)
-    setTab('people')
+    navigate('/hr')
   }
 
   function handleUpdate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!isAdmin || !editingId || !editingEmployee) return
+    if (!editingId || !editingEmployee) return
     const data = readForm(new FormData(e.currentTarget))
     if (data.selectedDepts.length === 0) {
       window.alert('Select at least one department / work area.')
@@ -366,64 +410,53 @@ export function HrPage() {
       salary: data.salary,
       startDate: data.startDate,
       managerId: editingEmployee.isAdmin ? undefined : data.managerId,
+      signature: data.signature || undefined,
     })
-    setEditingId(null)
-    setTab('people')
+    navigate('/hr')
   }
 
   function openCreate() {
     if (!isAdmin) return
-    setEditingId(null)
-    setTab('form')
+    navigate('/hr/new')
   }
 
   function openEdit(id: string) {
-    if (!isAdmin) return
-    setEditingId(id)
-    setTab('form')
-  }
-
-  function closeForm() {
-    setEditingId(null)
-    setTab('people')
+    navigate(`/hr/${id}/edit`)
   }
 
   const formMode = editingId ? 'edit' : 'create'
-  const showForm = isAdmin && tab === 'form'
+  const showForm = tab === 'form' && (Boolean(editingId) || isAdmin)
+
+  if (pathname.endsWith('/edit') && editingId && !editingEmployee) {
+    return <Navigate to="/hr" replace />
+  }
+  if (pathname.endsWith('/new') && !isAdmin) {
+    return <Navigate to="/hr" replace />
+  }
 
   return (
     <div>
       <PageHeader
         title="Human Resources"
         actions={
-          isAdmin ? (
-            showForm ? (
-              <Button variant="cancel" onClick={closeForm}>
-                Cancel
-              </Button>
-            ) : (
-              <Button onClick={openCreate}>New employee</Button>
-            )
+          showForm ? (
+            <Button variant="cancel" onClick={() => navigate('/hr')}>
+              Cancel
+            </Button>
+          ) : isAdmin ? (
+            <Button onClick={openCreate}>New employee</Button>
           ) : undefined
         }
       />
 
       <div className="mb-5 flex flex-wrap gap-2">
         {(
-          [
-            ['people', 'Employees'],
-            ['leave', 'Leave'],
-            ['timesheets', 'Timesheets'],
-            ['payroll', 'Payroll'],
-          ] as const
-        ).map(([id, label]) => (
+          HR_TABS
+        ).map(([id, label, to]) => (
           <Button
             key={id}
             variant={tab === id || (id === 'people' && showForm) ? 'primary' : 'secondary'}
-            onClick={() => {
-              setEditingId(null)
-              setTab(id)
-            }}
+            onClick={() => navigate(to)}
           >
             {label}
           </Button>
@@ -462,16 +495,14 @@ export function HrPage() {
                   <Th>Role</Th>
                   <Th>Work areas</Th>
                   <Th>Reports to</Th>
-                  <Th>Direct reports</Th>
-                  <Th className="text-right">Leave bal.</Th>
-                  {isAdmin ? <Th></Th> : null}
+                  <Th className="text-right">Leave Balance</Th>
+                  <Th></Th>
                 </tr>
               </thead>
               <tbody>
                 {employeesInOrgOrder(employees).map((emp) => {
                   const depth = employeeDepth(emp, employees)
                   const manager = employees.find((e) => e.id === emp.managerId)
-                  const reports = directReports(emp.id, employees)
                   return (
                     <tr key={emp.id}>
                       <Td>
@@ -499,21 +530,12 @@ export function HrPage() {
                         </div>
                       </Td>
                       <Td>{manager ? manager.name : <span className="text-slate-soft/50">—</span>}</Td>
-                      <Td>
-                        {reports.length > 0 ? (
-                          reports.map((r) => r.name).join(', ')
-                        ) : (
-                          <span className="text-slate-soft/50">—</span>
-                        )}
+                      <Td className="text-right">{accruedLeaveBalance(emp.startDate)} days</Td>
+                      <Td className="text-right">
+                        <Button variant="secondary" onClick={() => openEdit(emp.id)}>
+                          Edit
+                        </Button>
                       </Td>
-                      <Td className="text-right">{emp.leaveBalance} days</Td>
-                      {isAdmin ? (
-                        <Td className="text-right">
-                          <Button variant="secondary" onClick={() => openEdit(emp.id)}>
-                            Edit
-                          </Button>
-                        </Td>
-                      ) : null}
                     </tr>
                   )
                 })}
@@ -550,24 +572,20 @@ export function HrPage() {
                       <Td className="font-medium">{emp?.name}</Td>
                       <Td>{lv.type}</Td>
                       <Td>
-                        {lv.startDate} → {lv.endDate}
+                        {formatDate(lv.startDate)} → {formatDate(lv.endDate)}
                       </Td>
                       <Td>{lv.days}</Td>
                       <Td>{lv.reason}</Td>
                       <Td>
-                        <Badge tone={statusTone(lv.status)}>{lv.status}</Badge>
+                        <div className="flex flex-col items-start gap-2">
+                          <Badge tone={statusTone(lv.status)}>{lv.status}</Badge>
+                          <SignatureStatusAvatars slots={leaveSignatureSlots(lv, employees)} />
+                        </div>
                       </Td>
-                      <Td className="space-x-2 text-right">
-                        {lv.status === 'pending' ? (
-                          <>
-                            <Button onClick={() => updateLeaveStatus(lv.id, 'approved')}>Approve</Button>
-                            <Button variant="danger" onClick={() => updateLeaveStatus(lv.id, 'rejected')}>
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          '—'
-                        )}
+                      <Td className="text-right">
+                        <Link to={`/hr/leave/${lv.id}`}>
+                          <Button variant="secondary">View</Button>
+                        </Link>
                       </Td>
                     </tr>
                   )
@@ -599,7 +617,7 @@ export function HrPage() {
                   return (
                     <tr key={ts.id}>
                       <Td className="font-medium">{emp?.name}</Td>
-                      <Td>{ts.weekOf}</Td>
+                      <Td>{formatDate(ts.weekOf)}</Td>
                       <Td>{ts.projectName ?? 'Operations / admin'}</Td>
                       <Td className="text-right font-semibold">{ts.hours}</Td>
                       <Td>

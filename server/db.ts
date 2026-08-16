@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { handwrittenSignatureDataUrl } from './signature.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dataDir = path.resolve(__dirname, '../data')
@@ -56,7 +57,8 @@ function migrate(db: Database.Database) {
       salary REAL NOT NULL,
       leave_balance REAL NOT NULL,
       manager_id TEXT,
-      is_admin INTEGER NOT NULL DEFAULT 0
+      is_admin INTEGER NOT NULL DEFAULT 0,
+      signature TEXT
     );
 
     CREATE TABLE IF NOT EXISTS funds (
@@ -145,6 +147,12 @@ function migrate(db: Database.Database) {
       linked_pr_id TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS leave_entitlements (
+      leave_type TEXT PRIMARY KEY,
+      days REAL NOT NULL,
+      period TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS leave_requests (
       id TEXT PRIMARY KEY,
       employee_id TEXT NOT NULL,
@@ -229,11 +237,63 @@ function migrate(db: Database.Database) {
       credit_usd REAL NOT NULL DEFAULT 0,
       credit_iqd REAL NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS cash_advances (
+      id TEXT PRIMARY KEY,
+      recipient TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      date_from TEXT NOT NULL DEFAULT '',
+      date_to TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS cash_advance_items (
+      id TEXT PRIMARY KEY,
+      cash_advance_id TEXT NOT NULL REFERENCES cash_advances(id) ON DELETE CASCADE,
+      purchase_request_id TEXT,
+      pr_number TEXT,
+      description TEXT NOT NULL,
+      debit_usd REAL NOT NULL DEFAULT 0,
+      debit_iqd REAL NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
   `)
 
   ensureColumn(db, 'purchase_requests', 'approver_name', 'TEXT')
   ensureColumn(db, 'purchase_requests', 'approver_position', 'TEXT')
   ensureColumn(db, 'purchase_requests', 'approver_date', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'rejection_reason', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'rejected_by', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'rejected_at', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'finance_signed_by', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'finance_signed_at', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'suggestion_baseline', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'rejection_reason', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'rejected_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'rejected_at', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'approved_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'lm_signed_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'lm_signed_at', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'hr_signed_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'hr_signed_at', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'date_from', `TEXT NOT NULL DEFAULT ''`)
+  db.prepare(
+    `UPDATE cash_advances SET date_from = date_to WHERE date_from IS NULL OR date_from = ''`,
+  ).run()
+  ensureColumn(db, 'cash_advances', 'status', `TEXT NOT NULL DEFAULT 'pending'`)
+  db.prepare(
+    `UPDATE cash_advances SET status = 'pending' WHERE status IS NULL OR status = ''`,
+  ).run()
+  ensureColumn(db, 'cash_advances', 'rejection_reason', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'rejected_by', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'rejected_at', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'approved_by', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'lm_signed_by', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'lm_signed_at', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'finance_signed_by', 'TEXT')
+  ensureColumn(db, 'cash_advances', 'finance_signed_at', 'TEXT')
   ensureColumn(db, 'transactions', 'currency', `TEXT NOT NULL DEFAULT 'USD'`)
   ensureColumn(db, 'transactions', 'debit', 'REAL NOT NULL DEFAULT 0')
   ensureColumn(db, 'transactions', 'credit', 'REAL NOT NULL DEFAULT 0')
@@ -253,8 +313,32 @@ function migrate(db: Database.Database) {
   ensureColumn(db, 'suppliers', 'sector', `TEXT NOT NULL DEFAULT ''`)
   ensureColumn(db, 'suppliers', 'created_at', `TEXT NOT NULL DEFAULT ''`)
   ensureColumn(db, 'opening_balances', 'cash_count_json', `TEXT NOT NULL DEFAULT ''`)
+  ensureColumn(db, 'employees', 'signature', 'TEXT')
   ensureColumn(db, 'opening_balances', 'bank_credit_usd', `REAL NOT NULL DEFAULT 0`)
   ensureColumn(db, 'opening_balances', 'bank_credit_iqd', `REAL NOT NULL DEFAULT 0`)
+  ensureEmployeeSignatures(db)
+  refreshSignatureArt(db)
+  ensureLeavePolicy(db)
+}
+
+export function ensurePrRejectionColumns(db: Database.Database) {
+  ensureColumn(db, 'purchase_requests', 'rejection_reason', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'rejected_by', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'rejected_at', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'finance_signed_by', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'finance_signed_at', 'TEXT')
+  ensureColumn(db, 'purchase_requests', 'suggestion_baseline', 'TEXT')
+}
+
+export function ensureLeaveRejectionColumns(db: Database.Database) {
+  ensureColumn(db, 'leave_requests', 'rejection_reason', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'rejected_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'rejected_at', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'approved_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'lm_signed_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'lm_signed_at', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'hr_signed_by', 'TEXT')
+  ensureColumn(db, 'leave_requests', 'hr_signed_at', 'TEXT')
 }
 
 function ensureColumn(db: Database.Database, table: string, column: string, type: string) {
@@ -262,6 +346,53 @@ function ensureColumn(db: Database.Database, table: string, column: string, type
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
   }
+}
+
+function ensureLeavePolicy(db: Database.Database) {
+  const upsert = db.prepare(
+    `INSERT INTO leave_entitlements (leave_type, days, period) VALUES (?, ?, ?)
+     ON CONFLICT(leave_type) DO UPDATE SET days = excluded.days, period = excluded.period`,
+  )
+  upsert.run('Annual', 2, 'accrual_month')
+  upsert.run('Sick', 30, 'year')
+  upsert.run('Unpaid', 4, 'month')
+  upsert.run('Bereavement', 7, 'year')
+
+  const insertChoice = db.prepare(
+    `INSERT OR IGNORE INTO choices (id, category, value, label, sort_order) VALUES (?, ?, ?, ?, ?)`,
+  )
+  insertChoice.run('choice-leave_type-Annual', 'leave_type', 'Annual', 'Annual', 1)
+  insertChoice.run('choice-leave_type-Sick', 'leave_type', 'Sick', 'Sick', 2)
+  insertChoice.run('choice-leave_type-Unpaid', 'leave_type', 'Unpaid', 'Unpaid', 3)
+  insertChoice.run('choice-leave_type-Bereavement', 'leave_type', 'Bereavement', 'Bereavement', 4)
+  db.prepare(`DELETE FROM choices WHERE category = 'leave_type' AND value = 'Other'`).run()
+}
+
+function ensureEmployeeSignatures(db: Database.Database) {
+  const rows = db.prepare('SELECT id, name, signature FROM employees').all() as Array<{
+    id: string
+    name: string
+    signature: string | null
+  }>
+  const update = db.prepare('UPDATE employees SET signature = ? WHERE id = ?')
+  for (const row of rows) {
+    if (!row.signature) {
+      update.run(handwrittenSignatureDataUrl(row.name), row.id)
+    }
+  }
+}
+
+function refreshSignatureArt(db: Database.Database) {
+  const key = 'signature_art_v12'
+  const done = db.prepare('SELECT value FROM app_meta WHERE key = ?').get(key) as { value: string } | undefined
+  if (done?.value === '1') return
+
+  const rows = db.prepare('SELECT id, name FROM employees').all() as Array<{ id: string; name: string }>
+  const update = db.prepare('UPDATE employees SET signature = ? WHERE id = ?')
+  for (const row of rows) {
+    update.run(handwrittenSignatureDataUrl(row.name), row.id)
+  }
+  db.prepare('INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)').run(key, '1')
 }
 
 function seedIfEmpty(db: Database.Database) {
@@ -337,8 +468,8 @@ function seedIfEmpty(db: Database.Database) {
 
     db.prepare(
       `INSERT INTO employees (
-        id, name, role, departments_json, email, start_date, salary, leave_balance, manager_id, is_admin
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, name, role, departments_json, email, start_date, salary, leave_balance, manager_id, is_admin, signature
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       'emp-zak',
       'Zak',
@@ -350,6 +481,7 @@ function seedIfEmpty(db: Database.Database) {
       12,
       null,
       1,
+      handwrittenSignatureDataUrl('Zak'),
     )
 
     db.prepare(`INSERT INTO app_meta (key, value) VALUES (?, ?)`).run('current_user_id', 'emp-zak')

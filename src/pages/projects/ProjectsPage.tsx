@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Panel } from '../../components/ui/Panel'
 import { Table, Td, Th } from '../../components/ui/Table'
 import { useDemo } from '../../context/DemoContext'
+import { formatDate } from '../../data/mockData'
 
 function ProjectList() {
   const { projects } = useDemo()
@@ -87,7 +88,7 @@ function ProjectDetail() {
               <li key={goal.id} className="flex items-start justify-between gap-3 border-b border-line/70 pb-3 last:border-0">
                 <div>
                   <div className="font-medium text-ink">{goal.title}</div>
-                  <div className="text-xs text-slate-soft/70">Target {goal.targetDate}</div>
+                  <div className="text-xs text-slate-soft/70">Target {formatDate(goal.targetDate)}</div>
                 </div>
                 <Badge tone={goal.done ? 'emerald' : 'amber'}>{goal.done ? 'done' : 'open'}</Badge>
               </li>
@@ -109,7 +110,7 @@ function ProjectDetail() {
                 <tr key={task.id}>
                   <Td className="font-medium">{task.title}</Td>
                   <Td>{task.assignee}</Td>
-                  <Td>{task.dueDate}</Td>
+                  <Td>{formatDate(task.dueDate)}</Td>
                   <Td>
                     <Badge tone={statusTone(task.status)}>{task.status.replace('_', ' ')}</Badge>
                   </Td>

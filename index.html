@@ -11,6 +11,13 @@
       rel="stylesheet"
     />
     <title>REEL — NGO ERP</title>
+    <script>
+      try {
+        if (localStorage.getItem('reel-theme') === 'dark') {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (_) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

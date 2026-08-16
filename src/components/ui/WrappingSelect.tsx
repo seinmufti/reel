@@ -25,11 +25,15 @@ function focusDropdownFilter() {
   input.setSelectionRange?.(len, len)
 }
 
-function syncDropdownPanelWidth(trigger: HTMLElement | null | undefined) {
-  if (!trigger) return
+function syncDropdownPanelWidth(
+  trigger: HTMLElement | null | undefined,
+  widthSource?: HTMLElement | null,
+) {
+  const source = widthSource ?? trigger
+  if (!source) return
 
   const apply = () => {
-    const width = `${Math.round(trigger.getBoundingClientRect().width)}px`
+    const width = `${Math.round(source.getBoundingClientRect().width)}px`
     document.querySelectorAll<HTMLElement>('.pr-dropdown-panel[data-pr-is-overlay="true"]').forEach((panel) => {
       panel.style.width = width
       panel.style.maxWidth = width
@@ -54,6 +58,7 @@ export function WrappingSelect({
   emptyFilterAction,
   /** Type in the field itself; matching options show in the panel */
   editable = false,
+  panelMatch = 'trigger',
 }: {
   name: string
   required?: boolean
@@ -69,6 +74,8 @@ export function WrappingSelect({
     onAction: (query: string) => void
   }
   editable?: boolean
+  /** Overlay width: the closed field, or the surrounding table */
+  panelMatch?: 'trigger' | 'table'
 }) {
   const dropdownRef = useRef<Dropdown>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -96,6 +103,14 @@ export function WrappingSelect({
   useEffect(() => {
     setTyped(orderedOptions.find((option) => option.value === value))
   }, [value, orderedOptions])
+
+  function panelWidthSource(trigger: HTMLElement | null | undefined) {
+    if (panelMatch === 'table') {
+      const table = wrapperRef.current?.closest('table')
+      if (table instanceof HTMLElement) return table
+    }
+    return trigger ?? undefined
+  }
 
   function selectedOption() {
     if (value === null || value === undefined) return undefined
@@ -156,9 +171,9 @@ export function WrappingSelect({
             }
           }}
           onShow={() => {
-            syncDropdownPanelWidth(
-              wrapperRef.current?.querySelector('.p-autocomplete') ?? wrapperRef.current,
-            )
+            const trigger =
+              wrapperRef.current?.querySelector('.p-autocomplete') ?? wrapperRef.current
+            syncDropdownPanelWidth(trigger instanceof HTMLElement ? trigger : null, panelWidthSource(trigger instanceof HTMLElement ? trigger : null))
           }}
         />
       </div>
@@ -216,7 +231,10 @@ export function WrappingSelect({
         onFilter={(e) => setFilterQuery(String(e.filter ?? ''))}
         onHide={() => setFilterQuery('')}
         onShow={() => {
-          syncDropdownPanelWidth(dropdownRef.current?.getElement() ?? wrapperRef.current?.querySelector('.p-dropdown'))
+          const trigger =
+            dropdownRef.current?.getElement() ?? wrapperRef.current?.querySelector('.p-dropdown')
+          const triggerEl = trigger instanceof HTMLElement ? trigger : null
+          syncDropdownPanelWidth(triggerEl, panelWidthSource(triggerEl))
           if (filter) {
             focusDropdownFilter()
             requestAnimationFrame(focusDropdownFilter)

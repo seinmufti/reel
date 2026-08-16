@@ -1,19 +1,28 @@
 import cors from 'cors'
 import express from 'express'
-import { getDbPath, openDb } from './db.js'
+import { ensureLeaveRejectionColumns, ensurePrRejectionColumns, getDbPath, openDb } from './db.js'
+import { handwrittenSignatureDataUrl } from './signature.js'
+import { leaveRequestFitsEntitlement, LEAVE_TYPES } from '../src/data/mockData'
 
 const db = openDb()
 const app = express()
 const PORT = Number(process.env.API_PORT || 8787)
 
 app.use(cors())
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '6mb' }))
 
 function meta(key: string) {
   const row = db.prepare('SELECT value FROM app_meta WHERE key = ?').get(key) as
     | { value: string }
     | undefined
   return row?.value
+}
+
+function employeeHasLineManager(employeeName: string): boolean {
+  const row = db
+    .prepare('SELECT manager_id FROM employees WHERE name = ?')
+    .get(String(employeeName || '').trim()) as { manager_id: string | null } | undefined
+  return Boolean(row?.manager_id)
 }
 
 function setMeta(key: string, value: string) {
@@ -35,6 +44,7 @@ function mapEmployee(row: Record<string, unknown>) {
     leaveBalance: row.leave_balance as number,
     managerId: (row.manager_id as string | null) ?? undefined,
     isAdmin: Boolean(row.is_admin),
+    signature: (row.signature as string | null) || undefined,
   }
 }
 
@@ -73,10 +83,49 @@ function mapPr(row: Record<string, unknown>) {
     approverName: (row.approver_name as string | null) ?? undefined,
     approverPosition: (row.approver_position as string | null) ?? undefined,
     approverDate: (row.approver_date as string | null) ?? undefined,
+    financeSignedBy: (row.finance_signed_by as string | null) ?? undefined,
+    financeSignedAt: (row.finance_signed_at as string | null) ?? undefined,
+    rejectionReason: (row.rejection_reason as string | null) ?? undefined,
+    rejectedBy: (row.rejected_by as string | null) ?? undefined,
+    rejectedAt: (row.rejected_at as string | null) ?? undefined,
     status: row.status as string,
     paymentStatus: row.payment_status as string,
     createdAt: row.created_at as string,
     items,
+    suggestionBaseline: parseSuggestionBaseline(row.suggestion_baseline),
+  }
+}
+
+function parseSuggestionBaseline(raw: unknown) {
+  if (!raw || typeof raw !== 'string') return undefined
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object') return undefined
+    if (!Array.isArray(parsed.items)) return undefined
+    return parsed
+  } catch {
+    return undefined
+  }
+}
+
+function mapLeaveRequest(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    employeeId: row.employee_id as string,
+    type: row.type as string,
+    startDate: row.start_date as string,
+    endDate: row.end_date as string,
+    days: row.days as number,
+    status: row.status as string,
+    reason: row.reason as string,
+    rejectionReason: (row.rejection_reason as string | null) ?? undefined,
+    rejectedBy: (row.rejected_by as string | null) ?? undefined,
+    rejectedAt: (row.rejected_at as string | null) ?? undefined,
+    approvedBy: (row.approved_by as string | null) ?? undefined,
+    lmSignedBy: (row.lm_signed_by as string | null) ?? undefined,
+    lmSignedAt: (row.lm_signed_at as string | null) ?? undefined,
+    hrSignedBy: (row.hr_signed_by as string | null) ?? undefined,
+    hrSignedAt: (row.hr_signed_at as string | null) ?? undefined,
   }
 }
 
@@ -118,6 +167,41 @@ function mapSupplier(row: Record<string, unknown>) {
     contact: String(row.contact ?? ''),
     notes: String(row.notes ?? ''),
     createdAt: String(row.created_at ?? ''),
+  }
+}
+
+function mapCashAdvance(row: Record<string, unknown>) {
+  const id = row.id as string
+  const items = db
+    .prepare(
+      `SELECT * FROM cash_advance_items WHERE cash_advance_id = ? ORDER BY sort_order ASC, id ASC`,
+    )
+    .all(id) as Array<Record<string, unknown>>
+  return {
+    id,
+    recipient: String(row.recipient ?? ''),
+    amount: Number(row.amount) || 0,
+    currency: row.currency === 'IQD' ? 'IQD' : 'USD',
+    dateFrom: String(row.date_from ?? ''),
+    dateTo: String(row.date_to ?? ''),
+    status: (row.status as string) || 'pending',
+    createdAt: String(row.created_at ?? ''),
+    rejectionReason: (row.rejection_reason as string | null) ?? undefined,
+    rejectedBy: (row.rejected_by as string | null) ?? undefined,
+    rejectedAt: (row.rejected_at as string | null) ?? undefined,
+    approvedBy: (row.approved_by as string | null) ?? undefined,
+    lmSignedBy: (row.lm_signed_by as string | null) ?? undefined,
+    lmSignedAt: (row.lm_signed_at as string | null) ?? undefined,
+    financeSignedBy: (row.finance_signed_by as string | null) ?? undefined,
+    financeSignedAt: (row.finance_signed_at as string | null) ?? undefined,
+    items: items.map((item) => ({
+      id: item.id as string,
+      purchaseRequestId: (item.purchase_request_id as string | null) ?? undefined,
+      prNumber: (item.pr_number as string | null) ?? undefined,
+      description: String(item.description ?? ''),
+      debitUsd: Number(item.debit_usd) || 0,
+      debitIqd: Number(item.debit_iqd) || 0,
+    })),
   }
 }
 
@@ -223,16 +307,14 @@ function bootstrap() {
       }
     }),
     leaveRequests: db.prepare('SELECT * FROM leave_requests ORDER BY start_date DESC').all().map((r) => {
+      return mapLeaveRequest(r as Record<string, unknown>)
+    }),
+    leaveEntitlements: db.prepare('SELECT * FROM leave_entitlements ORDER BY leave_type ASC').all().map((r) => {
       const row = r as Record<string, unknown>
       return {
-        id: row.id as string,
-        employeeId: row.employee_id as string,
-        type: row.type as string,
-        startDate: row.start_date as string,
-        endDate: row.end_date as string,
+        type: row.leave_type as string,
         days: row.days as number,
-        status: row.status as string,
-        reason: row.reason as string,
+        period: row.period as string,
       }
     }),
     timesheets: db.prepare('SELECT * FROM timesheets ORDER BY week_of DESC').all().map((r) => {
@@ -317,6 +399,10 @@ function bootstrap() {
         status: row.status as string,
       }
     }),
+    cashAdvances: db
+      .prepare('SELECT * FROM cash_advances ORDER BY created_at DESC, id DESC')
+      .all()
+      .map((r) => mapCashAdvance(r as Record<string, unknown>)),
   }
 }
 
@@ -421,6 +507,7 @@ app.post('/api/purchase-requests', (req, res) => {
 })
 
 app.put('/api/purchase-requests/:id', (req, res) => {
+  ensurePrRejectionColumns(db)
   const id = req.params.id
   const existing = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id) as
     | Record<string, unknown>
@@ -456,6 +543,12 @@ app.put('/api/purchase-requests/:id', (req, res) => {
       approver_name = @approver_name,
       approver_position = @approver_position,
       approver_date = @approver_date,
+      rejection_reason = @rejection_reason,
+      rejected_by = @rejected_by,
+      rejected_at = @rejected_at,
+      finance_signed_by = @finance_signed_by,
+      finance_signed_at = @finance_signed_at,
+      suggestion_baseline = @suggestion_baseline,
       status = @status
     WHERE id = @id
   `)
@@ -493,6 +586,32 @@ app.put('/api/purchase-requests/:id', (req, res) => {
         body.approverDate !== undefined
           ? body.approverDate || null
           : (existing.approver_date ?? null),
+      rejection_reason:
+        body.rejectionReason !== undefined
+          ? body.rejectionReason || null
+          : (existing.rejection_reason ?? null),
+      rejected_by:
+        body.rejectedBy !== undefined
+          ? body.rejectedBy || null
+          : (existing.rejected_by ?? null),
+      rejected_at:
+        body.rejectedAt !== undefined
+          ? body.rejectedAt || null
+          : (existing.rejected_at ?? null),
+      finance_signed_by:
+        body.financeSignedBy !== undefined
+          ? body.financeSignedBy || null
+          : (existing.finance_signed_by ?? null),
+      finance_signed_at:
+        body.financeSignedAt !== undefined
+          ? body.financeSignedAt || null
+          : (existing.finance_signed_at ?? null),
+      suggestion_baseline:
+        body.suggestionBaseline !== undefined
+          ? body.suggestionBaseline
+            ? JSON.stringify(body.suggestionBaseline)
+            : null
+          : (existing.suggestion_baseline ?? null),
       status: nextStatus,
     })
     deleteItems.run(id)
@@ -508,13 +627,18 @@ app.put('/api/purchase-requests/:id', (req, res) => {
       )
     })
   })
-  run()
+  try {
+    run()
+  } catch (err) {
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Update failed' })
+  }
 
   const updated = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id) as Record<
     string,
     unknown
   >
-  res.json(mapPr(updated))
+  const mapped = mapPr(updated)
+  res.json(mapped)
 })
 
 app.delete('/api/purchase-requests/:id', (req, res) => {
@@ -539,10 +663,88 @@ app.delete('/api/purchase-requests/:id', (req, res) => {
 })
 
 app.patch('/api/purchase-requests/:id/status', (req, res) => {
+  ensurePrRejectionColumns(db)
   const id = req.params.id
   const status = String(req.body?.status || '')
-  const result = db.prepare(`UPDATE purchase_requests SET status = ? WHERE id = ?`).run(status, id)
-  if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+  if (status === 'rejected') {
+    const rejectionReason = String(req.body?.rejectionReason || '').trim()
+    if (!rejectionReason) {
+      return res.status(400).json({ error: 'Rejection message is required' })
+    }
+    const rejectedBy = String(req.body?.rejectedBy || '').trim() || null
+    const rejectedAt = String(req.body?.rejectedAt || '') || new Date().toISOString()
+    try {
+      const result = db
+        .prepare(
+          `UPDATE purchase_requests SET status = ?, rejection_reason = ?, rejected_by = ?, rejected_at = ? WHERE id = ?`,
+        )
+        .run(status, rejectionReason, rejectedBy, rejectedAt, id)
+      if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : 'Reject failed' })
+    }
+  } else if (status === 'approved' || status === 'submitted') {
+    ensurePrRejectionColumns(db)
+    const signSlot = String(req.body?.signSlot || '').trim()
+    if (signSlot === 'lm' || signSlot === 'finance') {
+      const current = db
+        .prepare('SELECT approver_name, finance_signed_by, requester FROM purchase_requests WHERE id = ?')
+        .get(id) as
+        | { approver_name: string | null; finance_signed_by: string | null; requester: string }
+        | undefined
+      if (!current) return res.status(404).json({ error: 'PR not found' })
+
+      const requesterHasManager = employeeHasLineManager(current.requester)
+
+      if (signSlot === 'finance' && requesterHasManager && !current.approver_name) {
+        return res.status(400).json({ error: 'Line manager must sign before finance' })
+      }
+
+      if (signSlot === 'lm') {
+        const approverName = String(req.body?.approverName || '').trim() || null
+        const approverPosition = String(req.body?.approverPosition || '').trim() || null
+        const approverDate =
+          String(req.body?.approverDate || '').trim() || new Date().toISOString().slice(0, 10)
+        const result = db
+          .prepare(
+            `UPDATE purchase_requests SET status = 'submitted', approver_name = ?, approver_position = ?, approver_date = ? WHERE id = ?`,
+          )
+          .run(approverName, approverPosition, approverDate, id)
+        if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+      } else {
+        const financeSignedBy = String(req.body?.approvedBy || req.body?.financeSignedBy || '').trim() || null
+        const financeSignedAt = String(req.body?.approvedAt || req.body?.financeSignedAt || '') || new Date().toISOString()
+        db.prepare(
+          `UPDATE purchase_requests SET finance_signed_by = ?, finance_signed_at = ? WHERE id = ?`,
+        ).run(financeSignedBy, financeSignedAt, id)
+        const signed = db
+          .prepare('SELECT approver_name, finance_signed_by FROM purchase_requests WHERE id = ?')
+          .get(id) as
+          | { approver_name: string | null; finance_signed_by: string | null }
+          | undefined
+        if (!signed) return res.status(404).json({ error: 'PR not found' })
+        if (signed.finance_signed_by && (!requesterHasManager || signed.approver_name)) {
+          db.prepare(`UPDATE purchase_requests SET status = 'approved' WHERE id = ?`).run(id)
+        }
+      }
+    } else if (status === 'approved') {
+      const approverName = String(req.body?.approverName || '').trim() || null
+      const approverPosition = String(req.body?.approverPosition || '').trim() || null
+      const approverDate = String(req.body?.approverDate || '').trim() || new Date().toISOString().slice(0, 10)
+      const result = db
+        .prepare(
+          `UPDATE purchase_requests SET status = ?, approver_name = ?, approver_position = ?, approver_date = ? WHERE id = ?`,
+        )
+        .run(status, approverName, approverPosition, approverDate, id)
+      if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+    } else {
+      const result = db.prepare(`UPDATE purchase_requests SET status = ? WHERE id = ?`).run(status, id)
+      if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+    }
+  } else {
+    const result = db.prepare(`UPDATE purchase_requests SET status = ? WHERE id = ?`).run(status, id)
+    if (!result.changes) return res.status(404).json({ error: 'PR not found' })
+  }
   const row = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id) as Record<string, unknown>
   res.json(mapPr(row))
 })
@@ -692,6 +894,136 @@ app.post('/api/suppliers', (req, res) => {
   )
   const row = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(id) as Record<string, unknown>
   res.status(201).json(mapSupplier(row))
+})
+
+app.get('/api/cash-advances', (_req, res) => {
+  const rows = db
+    .prepare('SELECT * FROM cash_advances ORDER BY created_at DESC, id DESC')
+    .all() as Array<Record<string, unknown>>
+  res.json(rows.map(mapCashAdvance))
+})
+
+app.post('/api/cash-advances', (req, res) => {
+  const body = req.body ?? {}
+  const id = `ca-${Date.now()}`
+  const createdAt = new Date().toISOString().slice(0, 10)
+  const items = Array.isArray(body.items) ? body.items : []
+  const currency = body.currency === 'IQD' ? 'IQD' : 'USD'
+
+  const insertAdvance = db.prepare(`
+    INSERT INTO cash_advances (id, recipient, amount, currency, date_from, date_to, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const insertItem = db.prepare(`
+    INSERT INTO cash_advance_items (
+      id, cash_advance_id, purchase_request_id, pr_number, description, debit_usd, debit_iqd, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  const run = db.transaction(() => {
+    insertAdvance.run(
+      id,
+      String(body.recipient || '').trim(),
+      Number(body.amount) || 0,
+      currency,
+      String(body.dateFrom || body.dateTo || createdAt),
+      String(body.dateTo || createdAt),
+      String(body.status || 'pending'),
+      createdAt,
+    )
+    items.forEach((item: Record<string, unknown>, index: number) => {
+      insertItem.run(
+        String(item.id || `cai-${Date.now()}-${index}`),
+        id,
+        item.purchaseRequestId ? String(item.purchaseRequestId) : null,
+        item.prNumber ? String(item.prNumber) : null,
+        String(item.description || '').trim(),
+        Number(item.debitUsd) || 0,
+        Number(item.debitIqd) || 0,
+        index,
+      )
+    })
+  })
+  run()
+
+  const row = db.prepare('SELECT * FROM cash_advances WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json(mapCashAdvance(row))
+})
+
+app.patch('/api/cash-advances/:id/status', (req, res) => {
+  const id = req.params.id
+  const status = String(req.body?.status || '')
+  if (status === 'rejected') {
+    const rejectionReason = String(req.body?.rejectionReason || '').trim()
+    if (!rejectionReason) {
+      return res.status(400).json({ error: 'Rejection message is required' })
+    }
+    const rejectedBy = String(req.body?.rejectedBy || '').trim() || null
+    const rejectedAt = String(req.body?.rejectedAt || '') || new Date().toISOString()
+    const result = db
+      .prepare(
+        `UPDATE cash_advances SET status = ?, rejection_reason = ?, rejected_by = ?, rejected_at = ? WHERE id = ?`,
+      )
+      .run(status, rejectionReason, rejectedBy, rejectedAt, id)
+    if (!result.changes) return res.status(404).json({ error: 'Cash advance not found' })
+  } else {
+    const signSlot = String(req.body?.signSlot || '').trim()
+    const approvedBy = String(req.body?.approvedBy || '').trim() || null
+    const approvedAt = String(req.body?.approvedAt || '') || new Date().toISOString()
+    if (signSlot === 'lm' || signSlot === 'finance') {
+      const current = db
+        .prepare('SELECT lm_signed_by, finance_signed_by FROM cash_advances WHERE id = ?')
+        .get(id) as
+        | { lm_signed_by: string | null; finance_signed_by: string | null }
+        | undefined
+      if (!current) return res.status(404).json({ error: 'Cash advance not found' })
+      if (signSlot === 'finance' && !current.lm_signed_by) {
+        return res.status(400).json({ error: 'Line manager must sign before finance' })
+      }
+      if (signSlot === 'lm') {
+        db.prepare(`UPDATE cash_advances SET lm_signed_by = ?, lm_signed_at = ? WHERE id = ?`).run(
+          approvedBy,
+          approvedAt,
+          id,
+        )
+      } else {
+        db.prepare(
+          `UPDATE cash_advances SET finance_signed_by = ?, finance_signed_at = ? WHERE id = ?`,
+        ).run(approvedBy, approvedAt, id)
+      }
+      const signed = db.prepare('SELECT lm_signed_by, finance_signed_by FROM cash_advances WHERE id = ?').get(id) as
+        | { lm_signed_by: string | null; finance_signed_by: string | null }
+        | undefined
+      if (!signed) return res.status(404).json({ error: 'Cash advance not found' })
+      if (signed.lm_signed_by && signed.finance_signed_by) {
+        db.prepare(`UPDATE cash_advances SET status = 'approved', approved_by = ? WHERE id = ?`).run(
+          approvedBy,
+          id,
+        )
+      }
+    } else {
+      const result = approvedBy
+        ? db
+            .prepare(`UPDATE cash_advances SET status = ?, approved_by = ? WHERE id = ?`)
+            .run(status, approvedBy, id)
+        : db.prepare('UPDATE cash_advances SET status = ? WHERE id = ?').run(status, id)
+      if (!result.changes) return res.status(404).json({ error: 'Cash advance not found' })
+    }
+  }
+  const row = db.prepare('SELECT * FROM cash_advances WHERE id = ?').get(id) as Record<string, unknown>
+  res.json(mapCashAdvance(row))
+})
+
+app.delete('/api/cash-advances/:id', (req, res) => {
+  const id = req.params.id
+  const existing = db.prepare('SELECT id FROM cash_advances WHERE id = ?').get(id)
+  if (!existing) return res.status(404).json({ error: 'Cash advance not found' })
+  const run = db.transaction(() => {
+    db.prepare('DELETE FROM cash_advance_items WHERE cash_advance_id = ?').run(id)
+    db.prepare('DELETE FROM cash_advances WHERE id = ?').run(id)
+  })
+  run()
+  res.json({ ok: true, id })
 })
 
 app.put('/api/suppliers/:id', (req, res) => {
@@ -861,21 +1193,129 @@ app.patch('/api/inventory/:id', (req, res) => {
 })
 
 app.patch('/api/leave-requests/:id/status', (req, res) => {
+  ensureLeaveRejectionColumns(db)
   const id = req.params.id
   const status = String(req.body?.status || '')
-  const result = db.prepare('UPDATE leave_requests SET status = ? WHERE id = ?').run(status, id)
-  if (!result.changes) return res.status(404).json({ error: 'Leave request not found' })
+  if (status === 'rejected') {
+    const rejectionReason = String(req.body?.rejectionReason || '').trim()
+    if (!rejectionReason) {
+      return res.status(400).json({ error: 'Rejection message is required' })
+    }
+    const rejectedBy = String(req.body?.rejectedBy || '').trim() || null
+    const rejectedAt = String(req.body?.rejectedAt || '') || new Date().toISOString()
+    const result = db
+      .prepare(
+        `UPDATE leave_requests SET status = ?, rejection_reason = ?, rejected_by = ?, rejected_at = ? WHERE id = ?`,
+      )
+      .run(status, rejectionReason, rejectedBy, rejectedAt, id)
+    if (!result.changes) return res.status(404).json({ error: 'Leave request not found' })
+  } else {
+    const signSlot = String(req.body?.signSlot || '').trim()
+    const approvedBy = String(req.body?.approvedBy || '').trim() || null
+    const approvedAt = String(req.body?.approvedAt || '') || new Date().toISOString()
+    if (signSlot === 'lm' || signSlot === 'hr') {
+      const current = db
+        .prepare('SELECT lm_signed_by, hr_signed_by FROM leave_requests WHERE id = ?')
+        .get(id) as
+        | { lm_signed_by: string | null; hr_signed_by: string | null }
+        | undefined
+      if (!current) return res.status(404).json({ error: 'Leave request not found' })
+      if (signSlot === 'hr' && !current.lm_signed_by) {
+        return res.status(400).json({ error: 'Line manager must sign before HR' })
+      }
+      if (signSlot === 'lm') {
+        db.prepare(`UPDATE leave_requests SET lm_signed_by = ?, lm_signed_at = ? WHERE id = ?`).run(
+          approvedBy,
+          approvedAt,
+          id,
+        )
+      } else {
+        db.prepare(`UPDATE leave_requests SET hr_signed_by = ?, hr_signed_at = ? WHERE id = ?`).run(
+          approvedBy,
+          approvedAt,
+          id,
+        )
+      }
+      const signed = db.prepare('SELECT lm_signed_by, hr_signed_by FROM leave_requests WHERE id = ?').get(id) as
+        | { lm_signed_by: string | null; hr_signed_by: string | null }
+        | undefined
+      if (!signed) return res.status(404).json({ error: 'Leave request not found' })
+      if (signed.lm_signed_by && signed.hr_signed_by) {
+        db.prepare(`UPDATE leave_requests SET status = 'approved', approved_by = ? WHERE id = ?`).run(
+          approvedBy,
+          id,
+        )
+      }
+    } else {
+      const result = approvedBy
+        ? db
+            .prepare(`UPDATE leave_requests SET status = ?, approved_by = ? WHERE id = ?`)
+            .run(status, approvedBy, id)
+        : db.prepare('UPDATE leave_requests SET status = ? WHERE id = ?').run(status, id)
+      if (!result.changes) return res.status(404).json({ error: 'Leave request not found' })
+    }
+  }
   const row = db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(id) as Record<string, unknown>
-  res.json({
-    id: row.id,
-    employeeId: row.employee_id,
-    type: row.type,
-    startDate: row.start_date,
-    endDate: row.end_date,
-    days: row.days,
-    status: row.status,
-    reason: row.reason,
+  res.json(mapLeaveRequest(row))
+})
+
+app.post('/api/leave-requests', (req, res) => {
+  const body = req.body ?? {}
+  const id = `leave-${Date.now()}`
+  const employeeId = String(body.employeeId || '')
+  const type = String(body.type || '').trim()
+  const startDate = String(body.startDate || '')
+  const endDate = String(body.endDate || '')
+  const days = Number(body.days ?? 0)
+  const reason = String(body.reason || '').trim()
+  const status = String(body.status || 'pending')
+  if (!employeeId || !type || !startDate || !endDate || !reason) {
+    return res.status(400).json({ error: 'Missing required leave fields' })
+  }
+  if (!(LEAVE_TYPES as readonly string[]).includes(type)) {
+    return res.status(400).json({ error: 'Invalid leave type' })
+  }
+  const employee = db.prepare('SELECT start_date FROM employees WHERE id = ?').get(employeeId) as
+    | { start_date: string }
+    | undefined
+  if (!employee) return res.status(400).json({ error: 'Employee not found' })
+  const entitlements = db.prepare('SELECT * FROM leave_entitlements').all().map((r) => {
+    const row = r as Record<string, unknown>
+    return {
+      type: row.leave_type as string,
+      days: row.days as number,
+      period: row.period as 'year' | 'month' | 'accrual_month',
+    }
   })
+  const existing = db.prepare('SELECT * FROM leave_requests WHERE employee_id = ?').all(employeeId).map((r) => {
+    const row = r as Record<string, unknown>
+    return {
+      id: row.id as string,
+      employeeId: row.employee_id as string,
+      type: row.type as string,
+      startDate: row.start_date as string,
+      endDate: row.end_date as string,
+      days: row.days as number,
+      status: row.status as 'pending' | 'approved' | 'rejected',
+      reason: row.reason as string,
+    }
+  })
+  const fitError = leaveRequestFitsEntitlement({
+    type,
+    employeeId,
+    employeeStartDate: employee.start_date,
+    startDate,
+    endDate,
+    requests: existing,
+    entitlements,
+  })
+  if (fitError) return res.status(400).json({ error: fitError })
+  db.prepare(
+    `INSERT INTO leave_requests (id, employee_id, type, start_date, end_date, days, status, reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, employeeId, type, startDate, endDate, days, status, reason)
+  const row = db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(id) as Record<string, unknown>
+  res.status(201).json(mapLeaveRequest(row))
 })
 
 app.patch('/api/trips/:id/status', (req, res) => {
@@ -934,8 +1374,8 @@ app.post('/api/employees', (req, res) => {
   const departments = Array.isArray(body.departments) ? body.departments : []
   db.prepare(
     `INSERT INTO employees (
-      id, name, role, departments_json, email, start_date, salary, leave_balance, manager_id, is_admin
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      id, name, role, departments_json, email, start_date, salary, leave_balance, manager_id, is_admin, signature
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
   ).run(
     id,
     String(body.name || ''),
@@ -946,6 +1386,9 @@ app.post('/api/employees', (req, res) => {
     Number(body.salary) || 0,
     Number(body.leaveBalance ?? 15),
     body.managerId ?? null,
+    typeof body.signature === 'string' && body.signature.startsWith('data:image/')
+      ? body.signature
+      : handwrittenSignatureDataUrl(String(body.name || '')),
   )
   const row = db.prepare('SELECT * FROM employees WHERE id = ?').get(id) as Record<string, unknown>
   res.status(201).json(mapEmployee(row))
@@ -960,10 +1403,16 @@ app.put('/api/employees/:id', (req, res) => {
   const body = req.body ?? {}
   const departments = Array.isArray(body.departments) ? body.departments : []
   const isAdmin = Boolean(existing.is_admin)
+  const signature =
+    typeof body.signature === 'string'
+      ? body.signature.startsWith('data:image/')
+        ? body.signature
+        : null
+      : ((existing.signature as string | null) ?? null)
   db.prepare(
     `UPDATE employees SET
       name = ?, role = ?, departments_json = ?, email = ?, start_date = ?,
-      salary = ?, leave_balance = ?, manager_id = ?
+      salary = ?, leave_balance = ?, manager_id = ?, signature = ?
      WHERE id = ?`,
   ).run(
     String(body.name || existing.name),
@@ -974,6 +1423,7 @@ app.put('/api/employees/:id', (req, res) => {
     Number(body.salary ?? existing.salary),
     Number(body.leaveBalance ?? existing.leave_balance),
     isAdmin ? null : (body.managerId ?? null),
+    signature,
     id,
   )
   const row = db.prepare('SELECT * FROM employees WHERE id = ?').get(id) as Record<string, unknown>

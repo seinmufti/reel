@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { type FormEvent } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Badge, statusTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Field, inputClass } from '../../components/ui/Field'
@@ -6,10 +7,41 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Panel } from '../../components/ui/Panel'
 import { Table, Td, Th } from '../../components/ui/Table'
 import { useDemo } from '../../context/DemoContext'
+import { formatDateRange } from '../../data/mockData'
+
+type FleetTab = 'trips' | 'vehicles' | 'drivers' | 'new'
+
+const FLEET_TABS = [
+  ['trips', 'Trip requests', '/fleet'],
+  ['vehicles', 'Vehicles', '/fleet/vehicles'],
+  ['drivers', 'Drivers', '/fleet/drivers'],
+  ['new', 'New trip', '/fleet/new'],
+] as const
+
+function fleetTabFromPath(pathname: string): FleetTab {
+  if (pathname.endsWith('/vehicles')) return 'vehicles'
+  if (pathname.endsWith('/drivers')) return 'drivers'
+  if (pathname.endsWith('/new')) return 'new'
+  return 'trips'
+}
 
 export function FleetPage() {
+  return (
+    <Routes>
+      <Route index element={<FleetShell />} />
+      <Route path="vehicles" element={<FleetShell />} />
+      <Route path="drivers" element={<FleetShell />} />
+      <Route path="new" element={<FleetShell />} />
+      <Route path="*" element={<Navigate to="/fleet" replace />} />
+    </Routes>
+  )
+}
+
+function FleetShell() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { trips, updateTripStatus, addTrip, currentUser, drivers, vehicles } = useDemo()
-  const [tab, setTab] = useState<'trips' | 'vehicles' | 'drivers' | 'new'>('trips')
+  const tab = fleetTabFromPath(pathname)
 
   const upcoming = [...trips].sort((a, b) => a.startDate.localeCompare(b.startDate))
 
@@ -26,7 +58,7 @@ export function FleetPage() {
       endDate: String(fd.get('endDate')),
     })
     e.currentTarget.reset()
-    setTab('trips')
+    navigate('/fleet')
   }
 
   return (
@@ -34,15 +66,8 @@ export function FleetPage() {
       <PageHeader title="Fleet Management" />
 
       <div className="mb-5 flex flex-wrap gap-2">
-        {(
-          [
-            ['trips', 'Trip requests'],
-            ['vehicles', 'Vehicles'],
-            ['drivers', 'Drivers'],
-            ['new', 'New trip'],
-          ] as const
-        ).map(([id, label]) => (
-          <Button key={id} variant={tab === id ? 'primary' : 'secondary'} onClick={() => setTab(id)}>
+        {FLEET_TABS.map(([id, label, to]) => (
+          <Button key={id} variant={tab === id ? 'primary' : 'secondary'} onClick={() => navigate(to)}>
             {label}
           </Button>
         ))}
@@ -77,8 +102,7 @@ export function FleetPage() {
                       </Td>
                       <Td>{trip.destination}</Td>
                       <Td>
-                        {trip.startDate}
-                        {trip.endDate !== trip.startDate ? ` → ${trip.endDate}` : ''}
+                        {formatDateRange(trip.startDate, trip.endDate)}
                       </Td>
                       <Td>{vehicle ? `${vehicle.plate}` : 'Unassigned'}</Td>
                       <Td>{driver?.name ?? 'Unassigned'}</Td>

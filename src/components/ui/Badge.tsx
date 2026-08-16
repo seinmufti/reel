@@ -5,6 +5,9 @@ const styles: Record<string, string> = {
   rose: 'bg-red-100 text-rose',
   emerald: 'bg-emerald-100 text-emerald-800',
   slate: 'bg-slate-200 text-slate-700',
+  violet: 'bg-violet-100 text-violet-800',
+  sky: 'bg-sky-100 text-sky-800',
+  orange: 'bg-orange-100 text-orange-800',
 }
 
 export function Badge({
@@ -48,4 +51,15 @@ export function statusTone(status: string): keyof typeof styles {
     unrestricted: 'teal',
   }
   return map[status] ?? 'default'
+}
+
+export function kindTone(kind: string): keyof typeof styles {
+  const map: Record<string, keyof typeof styles> = {
+    'Purchase request': 'teal',
+    'Leave request': 'violet',
+    Timesheet: 'sky',
+    'Trip request': 'orange',
+    'Cash advance': 'sky',
+  }
+  return map[kind] ?? 'default'
 }

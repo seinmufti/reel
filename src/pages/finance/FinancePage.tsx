@@ -9,6 +9,7 @@ import { Panel } from '../../components/ui/Panel'
 import { Table, Td, Th } from '../../components/ui/Table'
 import { WrappingSelect } from '../../components/ui/WrappingSelect'
 import { useDemo } from '../../context/DemoContext'
+import { formatDate } from '../../data/mockData'
 import type { CashCountSnapshot, PrCurrency, Supplier, Transaction } from '../../types'
 import {
   CashCountSection,
@@ -16,6 +17,7 @@ import {
   CASH_COUNT_USD_DENOMS,
   sumCashCountDenoms,
 } from './CashCountSection'
+import { CashAdvancesSection } from './CashAdvancesSection'
 
 type FinanceTab = 'ledger' | 'suppliers' | 'advances'
 type CashView = 'cashbook' | 'cashcount' | 'bankbook'
@@ -25,7 +27,7 @@ const INVOICE_COMPANY = 'NLYS'
 
 const CASHBOOK_COLUMNS = [
   { key: 'ref', width: 72, min: 56 },
-  { key: 'date', width: 108, min: 96 },
+  { key: 'date', width: 148, min: 128 },
   { key: 'description', width: 280, min: 140 },
   // Sized for $ + 5 digits (e.g. 99,999.00); longer amounts wrap
   { key: 'debitUsd', width: 112, min: 112 },
@@ -39,6 +41,33 @@ const CASHBOOK_COLUMNS = [
   { key: 'pr', width: 72, min: 52 },
   { key: 'actions', width: 44, min: 40 },
 ] as const
+
+const LEDGER_COL_WIDTHS_KEY = 'reel.finance.ledgerColWidths'
+
+function loadLedgerColWidths(): number[] {
+  const defaults = CASHBOOK_COLUMNS.map((col) => col.width)
+  try {
+    const raw = localStorage.getItem(LEDGER_COL_WIDTHS_KEY)
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed) || parsed.length !== CASHBOOK_COLUMNS.length) return defaults
+    return parsed.map((value, index) => {
+      const n = Number(value)
+      if (!Number.isFinite(n)) return defaults[index]
+      return Math.max(CASHBOOK_COLUMNS[index].min, Math.round(n))
+    })
+  } catch {
+    return defaults
+  }
+}
+
+function saveLedgerColWidths(widths: number[]) {
+  try {
+    localStorage.setItem(LEDGER_COL_WIDTHS_KEY, JSON.stringify(widths))
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 function CashbookTh({
   children,
@@ -408,13 +437,6 @@ function CashAmountCell({
   )
 }
 
-/** Display YYYY-MM-DD as DD-MM-YYYY */
-function formatDate(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim())
-  if (!match) return value
-  return `${match[3]}-${match[2]}-${match[1]}`
-}
-
 function formatWeekday(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim())
   if (!match) return ''
@@ -464,9 +486,7 @@ export function FinancePage() {
   const [entryInvoiceRef, setEntryInvoiceRef] = useState('')
   const [entryError, setEntryError] = useState<string | null>(null)
   const [savingEntry, setSavingEntry] = useState(false)
-  const [cashbookColWidths, setCashbookColWidths] = useState<number[]>(() =>
-    CASHBOOK_COLUMNS.map((col) => col.width),
-  )
+  const [cashbookColWidths, setCashbookColWidths] = useState<number[]>(loadLedgerColWidths)
   const cashbookColWidthsRef = useRef(cashbookColWidths)
   cashbookColWidthsRef.current = cashbookColWidths
   const [resizingCol, setResizingCol] = useState<number | null>(null)
@@ -506,18 +526,18 @@ export function FinancePage() {
 
   function setTab(next: FinanceTab) {
     if (next === 'suppliers') {
-      setSearchParams({ tab: 'suppliers' }, { replace: true })
+      setSearchParams({ tab: 'suppliers' })
       return
     }
     if (next === 'advances') {
-      setSearchParams({ tab: 'advances' }, { replace: true })
+      setSearchParams({ tab: 'advances' })
       return
     }
-    setSearchParams(viewSearchParams(cashView), { replace: true })
+    setSearchParams(viewSearchParams(cashView))
   }
 
   function setCashView(next: CashView) {
-    setSearchParams(viewSearchParams(next), { replace: true })
+    setSearchParams(viewSearchParams(next))
   }
 
   function shiftLedgerMonth(delta: number) {
@@ -553,6 +573,7 @@ export function FinancePage() {
       document.body.style.userSelect = ''
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      saveLedgerColWidths(cashbookColWidthsRef.current)
     }
 
     window.addEventListener('mousemove', onMove)
@@ -1142,6 +1163,10 @@ export function FinancePage() {
             <Button type="button" onClick={() => openNewSupplier()}>
               Add supplier
             </Button>
+          ) : tab === 'advances' ? (
+            <Link to="/finance/cash-advance/new">
+              <Button type="button">New cash advance</Button>
+            </Link>
           ) : null
         }
       />
@@ -1254,10 +1279,10 @@ export function FinancePage() {
                 position="top"
               />
               <Table
-                className={`w-full table-fixed [&_th]:align-middle [&_th]:whitespace-normal [&_th]:break-words [&_td]:align-middle [&_td]:whitespace-normal [&_td]:break-words [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-line [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-line/70 [&_tbody>tr:not(:first-child):nth-child(even)]:bg-slate-100 [&_tbody>tr:not(:first-child):nth-child(odd)]:bg-white ${
+                className={`table-fixed [&_th]:align-middle [&_th]:whitespace-normal [&_th]:break-words [&_td]:align-middle [&_td]:whitespace-normal [&_td]:break-words [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-line [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-line/70 [&_tbody>tr:not(:first-child):nth-child(even)]:bg-slate-100 [&_tbody>tr:not(:first-child):nth-child(odd)]:bg-white ${
                   resizingCol !== null ? 'select-none' : ''
                 }`}
-                style={{ minWidth: cashbookTableMinWidth }}
+                style={{ width: cashbookTableMinWidth, minWidth: cashbookTableMinWidth }}
               >
                 <colgroup>
                   {cashbookColWidths.map((width, index) => (
@@ -1459,11 +1484,7 @@ export function FinancePage() {
         </Panel>
       ) : null}
 
-      {tab === 'advances' ? (
-        <Panel title="Cash Advances">
-          <p className="text-sm text-slate-soft/70">No cash advances yet.</p>
-        </Panel>
-      ) : null}
+      {tab === 'advances' ? <CashAdvancesSection /> : null}
 
       {tab === 'suppliers' ? (
         <Panel title="Suppliers">
